@@ -101,11 +101,141 @@ bin/console fos:user:promote // can add a role
 src/Resources/FOSUserBundle/views/layout.html.twig
 
 {% extends 'base.html.twig' %}
+
+
 {% block body %}
+
+{% if app.request.hasPreviousSession %}
+            {% for type, messages in app.session.flashbag.all() %}
+                {% for message in messages %}
+                    <div class="text-success flash-{{ type }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endfor %}
+{% endif %}
+
     {% block fos_user_content %}{% endblock %}
 {% endblock %}
 
-// override and edit a particular page for eg: register
+//////////////// override and edit a particular page for eg: register
 copy vendor/friendsofsymfony/Resources/views/Registration/register_content.html.twig 
 to
 src/Resources/FOSUserBundle/views/Registration/register_content.html.twig
+
+//////////////////Translations/////////////////////
+
+//Override default message create file
+src/Resources/Translations/FOSUserBundle.en.yml 
+//To override registeration message add
+registration:
+    flash:
+        user_created: 'New user has been created successfully!.'
+
+(File to be override: vendor/friendsofsymfony/user-bundle/Resources/Translations/FOSUserBundle.en.yml)
+
+
+/////////////// creating new fields ////////////////
+// to add a field say firstName add in the entity and make migrations
+// configure new field
+src/Form/RegistrationFormType.php
+<?php
+namespace App\Form;
+use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\FormBuilderInterface;
+use FOS\UserBundle\Form\Type\RegistrationFormType as BaseRegistrationFormType;
+class RegistrationFormType extends AbstractType
+{
+    public function buildForm(FormBuilderInterface $builder, array $options)
+    {
+        $builder
+            ->add('firstName');
+    }
+    public function getParent()
+    {
+        return BaseRegistrationFormType::class;
+    }
+}
+
+//config/services.yaml
+services:
+    app.form.registration:
+        class: App\Form\RegistrationFormType
+        tags:
+            - { name: form.type }  
+fos_user:
+    registration:
+        form:
+            type: App\Form\RegistrationFormType            
+
+/////////////////////// Re order form elements /////////////////////
+src/Resources/FOSUserBundle/views/Registration/register_content.html.twig
+    {{ form_row(form.email) }}
+    {{ form_row(form.username) }}
+    {{ form_row(form.firstName) }}
+    {{ form_row(form.plainPassword) }}      
+
+
+////////////// Remove a pre given field like username ////////////
+// set username as email
+src/Entity/User.php   
+    /**
+     * Overridden so that username is now optional
+     *
+     * @param string $email
+     * @return User
+     */
+    public function setEmail($email)
+    {
+        $this->setUsername($email);
+        return parent::setEmail($email);
+    }       
+// now username will be same as the email id
+// remove username from form
+src/Form/RegistrationFormType.php  
+public function buildForm(FormBuilderInterface $builder, array $options)
+    {
+        $builder
+            ->add('firstName')
+            ->remove('username');
+    }
+// Now remove field from front end
+src/Resources/FOSUserBundle/views/Registration/register_content.html.twig      
+
+///////////////// change events like(after registration) ///////////////
+src/EventListener/RedirectAfterRegistrationSubscriber.php
+<?php
+namespace App\EventListener;
+use FOS\UserBundle\Event\FormEvent;
+use FOS\UserBundle\FOSUserEvents;
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\HttpFoundation\RedirectResponse;
+use Symfony\Component\Routing\RouterInterface;
+class RedirectAfterRegistrationSubscriber implements EventSubscriberInterface
+{
+    private $router;
+    public function __construct(RouterInterface $router)
+    {
+        $this->router = $router;
+    }
+    public function onRegistrationSuccess(FormEvent $event)
+    {
+        $url = $this->router->generate('homepage');
+        $response = new RedirectResponse($url);       
+        $event->setResponse($response);
+    }
+    public static function getSubscribedEvents()
+    {
+        return [
+            FOSUserEvents::REGISTRATION_SUCCESS => 'onRegistrationSuccess'
+        ];
+    }
+}
+
+/// config/services.yaml
+services:
+    app.redirect_after_registration_subscriber:
+        class: App\EventListener\RedirectAfterRegistrationSubscriber
+        autowire: true
+        tags:
+            - { name: kernel.event_subscriber }
