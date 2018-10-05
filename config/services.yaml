@@ -47,11 +47,23 @@ fos_user:
     firewall_name: main
     user_class: App\Entity\User
     from_email:
-        address: "hello@guys.com"
-        sender_name: "The sender name"
+        address: noreply@example.com
+        sender_name: Sender name
     registration:
         form:
             type: App\Form\RegistrationFormType
+        confirmation:
+            enabled: true  
+            template:   '@FOSUser/Registration/email.txt.twig'
+            from_email:
+                address:        itsmejasbirsingh@gmail.com
+                sender_name:    Demo Registration  
     profile:
         form:
-            type: App\Form\ProfileFormType        
+            type: App\Form\ProfileFormType 
+    #resetting:
+    #    email:
+    #        from_email:
+    #            address:        resetting@example.com
+    #            sender_name:    Demo Resetting
+    #        template:   email/password_resetting.email.twig
